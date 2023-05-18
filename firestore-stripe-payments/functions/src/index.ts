@@ -69,9 +69,35 @@ const createCustomerRecord = async ({
     if (email) customerData.email = email;
     if (phone) customerData.phone = phone;
     const customer = await stripe.customers.create(customerData);
+
+    const capitalizedEmail = email.value.charAt(0).toUpperCase() + email.value.slice(1);
+    const termAgree = false;
+    const subscription = "None";
+    const bioId = false;
+    const image = "";
+    const imageFile = "";
+    const carData = {
+        make: "",
+        model: "",
+        carYear: "",
+        air: { airGrade: "A", airValue: 100 },
+        tires: { tireGrade: "A", tireValue: 100 },
+        cabin: { cabinGrade: "A", cabinValue: 100 },
+        brakes: { brakeGrade: "A", brakeValue: 100 },
+        rotor: { rotorGrade: "A", rotorValue: 100 },
+        oil: { oilGrade: "A", oilValue: 100 }
+    };
+
     // Add a mapping record in Cloud Firestore.
     const customerRecord = {
-      email: customer.email,
+      email: capitalizedEmail,
+      firstName: "",
+      phoneNumber: "",
+      city: "",
+      state: "",
+      userId: "",
+      subscription,
+      carData,
       stripeId: customer.id,
       stripeLink: `https://dashboard.stripe.com${
         customer.livemode ? '' : '/test'
