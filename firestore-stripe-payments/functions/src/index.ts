@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import * as admin from 'firebase-admin';
 import { getEventarc } from 'firebase-admin/eventarc';
 import * as functions from 'firebase-functions';
@@ -27,8 +26,7 @@ import {
 } from './interfaces';
 import * as logs from './logs';
 import config from './config';
-
-const apiVersion = '2020-08-27';
+const apiVersion = '2022-11-15';
 const stripe = new Stripe(config.stripeSecretKey, {
   apiVersion,
   // Register extension as a Stripe plugin
@@ -38,15 +36,12 @@ const stripe = new Stripe(config.stripeSecretKey, {
     version: '0.3.3',
   },
 });
-
 admin.initializeApp();
-
 const eventChannel =
   process.env.EVENTARC_CHANNEL &&
   getEventarc().channel(process.env.EVENTARC_CHANNEL, {
     allowedEventTypes: process.env.EXT_SELECTED_EVENTS,
   });
-
 /**
  * Create a customer object in Stripe when a user is created.
  */
@@ -69,9 +64,36 @@ const createCustomerRecord = async ({
     if (email) customerData.email = email;
     if (phone) customerData.phone = phone;
     const customer = await stripe.customers.create(customerData);
+
+    const capitalizedEmail = email.value.charAt(0).toUpperCase() + email.value.slice(1);
+    const termAgree = false;
+    const subscription = "None";
+    const bioId = false;
+    const image = "";
+    const imageFile = "";
+    const carData = {
+        make: "",
+        model: "",
+        carYear: "",
+        air: { airGrade: "A", airValue: 100 },
+        tires: { tireGrade: "A", tireValue: 100 },
+        cabin: { cabinGrade: "A", cabinValue: 100 },
+        brakes: { brakeGrade: "A", brakeValue: 100 },
+        rotor: { rotorGrade: "A", rotorValue: 100 },
+        oil: { oilGrade: "A", oilValue: 100 }
+    };
+
     // Add a mapping record in Cloud Firestore.
     const customerRecord = {
       email: customer.email,
+      email: capitalizedEmail,
+      firstName: "",
+      phoneNumber: "",
+      city: "",
+      state: "",
+      userId: "",
+      subscription,
+      carData,
       stripeId: customer.id,
       stripeLink: `https://dashboard.stripe.com${
         customer.livemode ? '' : '/test'
@@ -90,7 +112,6 @@ const createCustomerRecord = async ({
     return null;
   }
 };
-
 exports.createCustomer = functions.auth
   .user()
   .onCreate(async (user): Promise<void> => {
@@ -102,7 +123,6 @@ exports.createCustomer = functions.auth
       phone: phoneNumber,
     });
   });
-
 /**
  * Create a CheckoutSession or PaymentIntent based on which client is being used.
  */
@@ -322,7 +342,6 @@ exports.createCheckoutSession = functions
       );
     }
   });
-
 /**
  * Create a billing portal link
  */
@@ -364,7 +383,6 @@ export const createPortalLink = functions.https.onCall(
     }
   }
 );
-
 /**
  * Prefix Stripe metadata keys with `stripe_metadata_` to be spread onto Product and Price docs in Cloud Firestore.
  */
@@ -373,13 +391,11 @@ const prefixMetadata = (metadata: object) =>
     prefixedMetadata[`stripe_metadata_${key}`] = metadata[key];
     return prefixedMetadata;
   }, {});
-
 /**
  * Create a Product record in Firestore based on a Stripe Product object.
  */
 const createProductRecord = async (product: Stripe.Product): Promise<void> => {
   const { firebaseRole, ...rawMetadata } = product.metadata;
-
   const productData: Product = {
     active: product.active,
     name: product.name,
@@ -397,7 +413,6 @@ const createProductRecord = async (product: Stripe.Product): Promise<void> => {
     .set(productData, { merge: true });
   logs.firestoreDocCreated(config.productsCollectionPath, product.id);
 };
-
 /**
  * Create a price (billing price plan) and insert it into a subcollection in Products.
  */
@@ -405,7 +420,6 @@ const insertPriceRecord = async (price: Stripe.Price): Promise<void> => {
   if (price.billing_scheme === 'tiered')
     // Tiers aren't included by default, we need to retireve and expand.
     price = await stripe.prices.retrieve(price.id, { expand: ['tiers'] });
-
   const priceData: Price = {
     active: price.active,
     billing_scheme: price.billing_scheme,
@@ -433,7 +447,6 @@ const insertPriceRecord = async (price: Stripe.Price): Promise<void> => {
   await dbRef.doc(price.id).set(priceData, { merge: true });
   logs.firestoreDocCreated('prices', price.id);
 };
-
 /**
  * Insert tax rates into the products collection in Cloud Firestore.
  */
@@ -452,7 +465,6 @@ const insertTaxRateRecord = async (taxRate: Stripe.TaxRate): Promise<void> => {
     .set(taxRateData);
   logs.firestoreDocCreated('tax_rates', taxRate.id);
 };
-
 /**
  * Copies the billing details from the payment method to the customer object.
  */
@@ -463,7 +475,6 @@ const copyBillingDetailsToCustomer = async (
   const { name, phone, address } = payment_method.billing_details;
   await stripe.customers.update(customer, { name, phone, address });
 };
-
 /**
  * Manage subscription status changes.
  */
@@ -550,9 +561,7 @@ const manageSubscriptionStatusChange = async (
       : null,
   };
   await subsDbRef.set(subscriptionData);
-
   logs.firestoreDocCreated('subscriptions', subscription.id);
-
   // Update their custom claims
   if (role) {
     try {
@@ -575,7 +584,6 @@ const manageSubscriptionStatusChange = async (
       return;
     }
   }
-
   // NOTE: This is a costly operation and should happen at the very end.
   // Copy the billing deatils to the customer object.
   if (createAction && subscription.default_payment_method) {
@@ -583,10 +591,8 @@ const manageSubscriptionStatusChange = async (
       subscription.default_payment_method as Stripe.PaymentMethod
     );
   }
-
   return;
 };
-
 /**
  * Add invoice objects to Cloud Firestore.
  */
@@ -607,7 +613,6 @@ const insertInvoiceRecord = async (invoice: Stripe.Invoice) => {
     .collection('invoices')
     .doc(invoice.id)
     .set(invoice);
-
   const prices = [];
   for (const item of invoice.lines.data) {
     prices.push(
@@ -619,10 +624,8 @@ const insertInvoiceRecord = async (invoice: Stripe.Invoice) => {
         .doc(item.price.id)
     );
   }
-
   // An Invoice object does not always have an associated Payment Intent
   const recordId: string = (invoice.payment_intent as string) ?? invoice.id;
-
   // Update subscription payment with price data
   await customersSnap.docs[0].ref
     .collection('payments')
@@ -630,7 +633,6 @@ const insertInvoiceRecord = async (invoice: Stripe.Invoice) => {
     .set({ prices }, { merge: true });
   logs.firestoreDocCreated('invoices', invoice.id);
 };
-
 /**
  * Add PaymentIntent objects to Cloud Firestore for one-time payments.
  */
@@ -672,7 +674,6 @@ const insertPaymentRecord = async (
     .set(payment, { merge: true });
   logs.firestoreDocCreated('payments', payment.id);
 };
-
 /**
  * A webhook handler function for the relevant Stripe events.
  */
@@ -705,7 +706,6 @@ export const handleWebhookEvents = functions.handler.https.onRequest(
       'payment_intent.payment_failed',
     ]);
     let event: Stripe.Event;
-
     // Instead of getting the `Stripe.Event`
     // object directly from `req.body`,
     // use the Stripe webhooks API to make sure
@@ -721,7 +721,6 @@ export const handleWebhookEvents = functions.handler.https.onRequest(
       resp.status(401).send('Webhook Error: Invalid Secret');
       return;
     }
-
     if (relevantEvents.has(event.type)) {
       logs.startWebhookEventProcessing(event.id, event.type);
       try {
@@ -810,14 +809,12 @@ export const handleWebhookEvents = functions.handler.https.onRequest(
               event.type
             );
         }
-
         if (eventChannel) {
           await eventChannel.publish({
             type: `com.stripe.v1.${event.type}`,
             data: event.data.object,
           });
         }
-
         logs.webhookHandlerSucceeded(event.id, event.type);
       } catch (error) {
         logs.webhookHandlerError(error, event.id, event.type);
@@ -827,12 +824,10 @@ export const handleWebhookEvents = functions.handler.https.onRequest(
         return;
       }
     }
-
     // Return a response to Stripe to acknowledge receipt of the event.
     resp.json({ received: true });
   }
 );
-
 const deleteProductOrPrice = async (pr: Stripe.Product | Stripe.Price) => {
   if (pr.object === 'product') {
     await admin
@@ -853,7 +848,6 @@ const deleteProductOrPrice = async (pr: Stripe.Product | Stripe.Price) => {
     logs.firestoreDocDeleted('prices', pr.id);
   }
 };
-
 const deleteStripeCustomer = async ({
   uid,
   stripeId,
@@ -886,7 +880,6 @@ const deleteStripeCustomer = async ({
     logs.customerDeletionError(error, uid);
   }
 };
-
 /*
  * The `onUserDeleted` deletes their customer object in Stripe which immediately cancels all their subscriptions.
  */
@@ -906,7 +899,6 @@ export const onUserDeleted = functions.auth.user().onDelete(async (user) => {
     await deleteStripeCustomer({ uid: user.uid, stripeId: customer.stripeId });
   }
 });
-
 /*
  * The `onCustomerDataDeleted` deletes their customer object in Stripe which immediately cancels all their subscriptions.
  */
