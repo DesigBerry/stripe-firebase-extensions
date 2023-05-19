@@ -65,7 +65,7 @@ const createCustomerRecord = async ({
     if (phone) customerData.phone = phone;
     const customer = await stripe.customers.create(customerData);
 
-    const capitalizedEmail = email.value.charAt(0).toUpperCase() + email.value.slice(1);
+    const capitalizedEmail = email.charAt(0).toUpperCase() + email.slice(1);
     const termAgree = false;
     const subscription = "None";
     const bioId = false;
@@ -84,20 +84,24 @@ const createCustomerRecord = async ({
     };
 
     // Add a mapping record in Cloud Firestore.
-    const customerRecord = {
-      email: customer.email,
+     const customerRecord = {
       email: capitalizedEmail,
       firstName: "",
+      lastName: "",
       phoneNumber: "",
+      termAgree,
       city: "",
       state: "",
       userId: "",
-      subscription,
-      carData,
+      subscription: subscription,
+      carData: carData,
       stripeId: customer.id,
       stripeLink: `https://dashboard.stripe.com${
         customer.livemode ? '' : '/test'
       }/customers/${customer.id}`,
+      bioId: bioId,
+      image: image,
+      imageFile: imageFile
     };
     if (phone) (customerRecord as any).phone = phone;
     await admin
